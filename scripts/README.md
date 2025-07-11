@@ -134,3 +134,59 @@ Attempting to retrieve console log from: https://ci.adoptium.net/job/release-ope
 Console log successfully written to: console.log
 File size: 245632 bytes
 ```
+=======
+# Jenkins Pipeline Job Extractor
+
+This directory contains scripts for working with Jenkins pipeline data.
+
+## get_spawned.py
+
+A Python script that extracts information about spawned pipeline jobs from Jenkins console output.
+
+### Usage
+
+```bash
+python3 scripts/get_spawned.py -i <input_file> -o <output_file>
+```
+
+### Parameters
+
+- `-i, --input`: Path to the Jenkins console output file (required)
+- `-o, --output`: Path for the output JSON file (required)
+
+### Example
+
+```bash
+python3 scripts/get_spawned.py -i console_output.txt -o spawned_jobs.json
+```
+
+### Output Format
+
+The script generates a JSON file with the following structure:
+
+```json
+{
+  "parent": {
+    "name": "parent-pipeline-name",
+    "build_number": "123",
+    "url": null,
+    "node": "jenkins-node-name"
+  },
+  "spawned_jobs": [
+    {
+      "name": "spawned-job-1",
+      "build_number": "456",
+      "url": "https://jenkins.example.com/job/spawned-job-1/456",
+      "result": "SUCCESS"
+    }
+  ]
+}
+```
+
+### Features
+
+- Extracts parent pipeline information from console output
+- Identifies spawned pipeline jobs with names, build numbers, URLs, and results
+- Handles various Jenkins console output formats
+- Provides proper error handling and validation
+- Outputs structured JSON data for easy processing
