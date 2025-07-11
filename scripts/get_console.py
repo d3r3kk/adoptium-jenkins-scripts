@@ -124,7 +124,6 @@ def write_console_log(console_log: str, output_file: Path) -> None:
 @click.option(
     "--token-file",
     type=click.Path(exists=True),
-    path_type=Path,
     help="Path to file containing Jenkins API token",
 )
 @click.option(
@@ -142,7 +141,6 @@ def write_console_log(console_log: str, output_file: Path) -> None:
     "--output",
     required=False,
     type=click.Path(),
-    path_type=Path,
     default="output.log",
     help="Output file path/name for console log. Defaults to 'output.log'.",
 )
@@ -150,10 +148,10 @@ def main(
     url: str,
     username: str,
     token: str,
-    token_file: Path,
+    token_file: click.Path,
     pipeline_name: str,
     run_number: int,
-    output: Path,
+    output: click.Path,
 ) -> None:
     """Pull console logs from Jenkins pipeline runs.
 
@@ -176,7 +174,7 @@ def main(
     if token:
         api_token = token
     else:
-        api_token = read_token_from_file(token_file)
+        api_token = read_token_from_file(Path(str(token_file)))
 
     # Validate inputs
     if not api_token:
@@ -195,7 +193,7 @@ def main(
     console_log = get_console_log(url, username, api_token, pipeline_name, run_number)
 
     # Write to output file
-    write_console_log(console_log, output)
+    write_console_log(console_log, Path(str(output)))
 
 
 if __name__ == "__main__":
