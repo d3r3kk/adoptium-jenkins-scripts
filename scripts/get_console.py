@@ -34,9 +34,7 @@ def read_token_from_file(token_file_path: Path) -> str:
         raise
 
 
-def get_console_log(
-    jenkins_url: str, username: str, api_token: str, pipeline_name: str, run_number: int
-) -> str:
+def get_console_log(jenkins_url: str, username: str, api_token: str, pipeline_name: str, run_number: int) -> str:
     """Retrieve console log from Jenkins pipeline run."""
     # Ensure jenkins_url ends with /
     if not jenkins_url.endswith("/"):
@@ -59,17 +57,13 @@ def get_console_log(
 
     try:
         # Make request with authentication
-        response = requests.get(
-            console_url, auth=HTTPBasicAuth(username, api_token), timeout=60
-        )
+        response = requests.get(console_url, auth=HTTPBasicAuth(username, api_token), timeout=60)
 
         # Check if request was successful
         if response.status_code == 200:
             return response.text
         elif response.status_code == 401:
-            raise requests.exceptions.HTTPError(
-                "Authentication failed. Please check your username and API token."
-            )
+            raise requests.exceptions.HTTPError("Authentication failed. Please check your username and API token.")
         elif response.status_code == 404:
             raise requests.exceptions.HTTPError(
                 f"Pipeline run not found. Please check that pipeline name '{pipeline_name}' and run "
@@ -81,9 +75,7 @@ def get_console_log(
             )
 
     except requests.exceptions.ConnectionError:
-        log.error(
-            f"Unable to connect to Jenkins server at '{jenkins_url}'. Please check the URL."
-        )
+        log.error(f"Unable to connect to Jenkins server at '{jenkins_url}'. Please check the URL.")
         raise
     except requests.exceptions.Timeout:
         log.error("Request timed out. The Jenkins server may be slow to respond.")
