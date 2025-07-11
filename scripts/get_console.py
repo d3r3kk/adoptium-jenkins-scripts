@@ -44,17 +44,13 @@ def get_console_log(jenkins_url, username, api_token, pipeline_name, run_number)
     encoded_pipeline = "/".join(encoded_parts)
 
     # Construct the console log URL
-    console_url = urljoin(
-        jenkins_url, f"job/{encoded_pipeline}/{run_number}/consoleText"
-    )
+    console_url = urljoin(jenkins_url, f"job/{encoded_pipeline}/{run_number}/consoleText")
 
     print(f"Attempting to retrieve console log from: {console_url}")
 
     try:
         # Make request with authentication
-        response = requests.get(
-            console_url, auth=HTTPBasicAuth(username, api_token), timeout=60
-        )
+        response = requests.get(console_url, auth=HTTPBasicAuth(username, api_token), timeout=60)
 
         # Check if request was successful
         if response.status_code == 200:
@@ -136,35 +132,24 @@ Examples:
         help="Jenkins server URL (default: https://ci.adoptium.net/)",
     )
 
-    parser.add_argument(
-        "--username", default="anonymous", help="Jenkins username (default: anonymous)"
-    )
+    parser.add_argument("--username", default="anonymous", help="Jenkins username (default: anonymous)")
 
     # Authentication options (mutually exclusive)
     auth_group = parser.add_mutually_exclusive_group(required=True)
     auth_group.add_argument("--token", help="Jenkins API token as string")
-    auth_group.add_argument(
-        "--token-file", help="Path to file containing Jenkins API token"
-    )
+    auth_group.add_argument("--token-file", help="Path to file containing Jenkins API token")
 
     # Pipeline identification
     parser.add_argument(
         "--pipeline-name",
         required=True,
-        help=(
-            'Pipeline name (e.g., "release-openjdk21-pipeline" '
-            'or "build-scripts/release-openjdk21-pipeline")'
-        ),
+        help=('Pipeline name (e.g., "release-openjdk21-pipeline" or "build-scripts/release-openjdk21-pipeline")'),
     )
 
-    parser.add_argument(
-        "--run-number", type=int, required=True, help="Pipeline run number (e.g., 48)"
-    )
+    parser.add_argument("--run-number", type=int, required=True, help="Pipeline run number (e.g., 48)")
 
     # Output configuration
-    parser.add_argument(
-        "--output", required=True, help="Output file path/name for console log"
-    )
+    parser.add_argument("--output", required=True, help="Output file path/name for console log")
 
     args = parser.parse_args()
 
@@ -190,9 +175,7 @@ Examples:
     print(f"Output file: {args.output}")
     print()
 
-    console_log = get_console_log(
-        args.url, args.username, api_token, args.pipeline_name, args.run_number
-    )
+    console_log = get_console_log(args.url, args.username, api_token, args.pipeline_name, args.run_number)
 
     # Write to output file
     write_console_log(console_log, args.output)
