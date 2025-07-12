@@ -23,6 +23,7 @@ class JenkinsConsoleParser:
         self.patterns = {
             # Pattern for pipeline job triggers (various formats)
             "job_trigger": [
+                r"Starting building: (.+?) #(\d+)",  # New pattern for "Starting building:" format
                 r"Starting build job (\S+) #(\d+)",
                 r"Triggering downstream project (\S+)",
                 r"Scheduling project: (\S+)",
@@ -176,7 +177,12 @@ class JenkinsConsoleParser:
         for pattern in self.patterns["job_trigger"]:
             match = re.search(pattern, line, re.IGNORECASE)
             if match:
-                job_info = {"name": match.group(1)}
+                job_name = match.group(1)
+                # Handle "Starting building:" format by replacing " » " with "/"
+                if " » " in job_name:
+                    job_name = job_name.replace(" » ", "/")
+
+                job_info = {"name": job_name}
                 if len(match.groups()) > 1 and match.group(2):
                     job_info["build_number"] = match.group(2)
                 job_info["url"] = None
