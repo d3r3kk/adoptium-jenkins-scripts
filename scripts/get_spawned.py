@@ -136,11 +136,7 @@ class JenkinsConsoleParser:
 
             # Look for job results
             result_info = self._extract_job_result(line)
-            if (
-                result_info
-                and result_info.get("name")
-                and result_info.get("build_number")
-            ):
+            if result_info and result_info.get("name") and result_info.get("build_number"):
                 job_name = result_info["name"]
                 build_number = result_info["build_number"]
                 job_key = f"{job_name}#{build_number}"
@@ -170,10 +166,7 @@ class JenkinsConsoleParser:
         # Second pass: add jobs with unknown build numbers only if no better
         # entry exists
         for _job_key, job_info in jobs_dict.items():
-            if (
-                job_info["build_number"] == "unknown"
-                and job_info["name"] not in processed_names
-            ):
+            if job_info["build_number"] == "unknown" and job_info["name"] not in processed_names:
                 spawned_jobs.append(job_info)
 
         return spawned_jobs
@@ -237,9 +230,7 @@ Examples:
         help="Path to the Jenkins console output file",
     )
 
-    parser.add_argument(
-        "-o", "--output", required=True, type=str, help="Path for the output JSON file"
-    )
+    parser.add_argument("-o", "--output", required=True, type=str, help="Path for the output JSON file")
 
     args = parser.parse_args()
 
@@ -270,9 +261,7 @@ Examples:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
 
-        print(
-            f"Successfully parsed console output and saved results to '{args.output}'"
-        )
+        print(f"Successfully parsed console output and saved results to '{args.output}'")
         print(f"Found {len(result['spawned_jobs'])} spawned jobs")
 
     except Exception as e:
