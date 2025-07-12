@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -31,46 +31,27 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip wheel
         pip install -e .[dev]
 
-    - name: Check if Python files exist
-      id: check_files
-      run: |
-        if find . -name "*.py" -type f | head -1 | grep -q .; then
-          echo "python_files_exist=true" >> $GITHUB_OUTPUT
-        else
-          echo "python_files_exist=false" >> $GITHUB_OUTPUT
-        fi
-
     - name: Run ruff check
-      if: steps.check_files.outputs.python_files_exist == 'true'
       run: |
         ruff check .
 
     - name: Run ruff format check
-      if: steps.check_files.outputs.python_files_exist == 'true'
       run: |
         ruff format --check .
 
     - name: Run mypy
-      if: steps.check_files.outputs.python_files_exist == 'true'
       run: |
-        mypy .
+        mypy scripts
 
     - name: Run pytest with coverage
-      if: steps.check_files.outputs.python_files_exist == 'true'
       run: |
         pytest --cov
 
     - name: Upload coverage reports to Codecov
-      if: steps.check_files.outputs.python_files_exist == 'true'
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml
         fail_ci_if_error: false
-
-    - name: No Python files found
-      if: steps.check_files.outputs.python_files_exist == 'false'
-      run: |
-        echo "No Python files found in the repository. Skipping Python quality checks."
