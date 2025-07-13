@@ -62,17 +62,13 @@ def get_console_log(
 
     try:
         # Make request with authentication
-        response = requests.get(
-            console_url, auth=HTTPBasicAuth(username, api_token), timeout=60
-        )
+        response = requests.get(console_url, auth=HTTPBasicAuth(username, api_token), timeout=60)
 
         # Check if request was successful
         if response.status_code == 200:
             return response.text
         elif response.status_code == 401:
-            raise requests.exceptions.HTTPError(
-                "Authentication failed. Please check your username and API token."
-            )
+            raise requests.exceptions.HTTPError("Authentication failed. Please check your username and API token.")
         elif response.status_code == 404:
             raise requests.exceptions.HTTPError(
                 f"Pipeline run not found. Please check that pipeline name '{pipeline_name}' and run "
@@ -84,9 +80,7 @@ def get_console_log(
             )
 
     except requests.exceptions.ConnectionError:
-        log.error(
-            f"Unable to connect to Jenkins server at '{jenkins_url}'. Please check the URL."
-        )
+        log.error(f"Unable to connect to Jenkins server at '{jenkins_url}'. Please check the URL.")
         raise
     except requests.exceptions.Timeout:
         log.error("Request timed out. The Jenkins server may be slow to respond.")
@@ -211,6 +205,7 @@ def main(
     # Write to output file
     write_console_log(html_log, html_output)
     write_console_log(raw_log, raw_output)
+
 
 if __name__ == "__main__":
     main()
