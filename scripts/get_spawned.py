@@ -76,7 +76,7 @@ class JenkinsConsoleParser:
 
         return None
 
-    def extract_spawned_jobs(self, lines: List[str]) -> Dict[str, SpawnedJob]:
+    def extract_spawned_jobs(self, lines: List[str], job_platforms: Dict[str, Dict[str, str]]) -> Dict[str, SpawnedJob]:
         # Regex to match strings containing 'jdk[number]u', 'release', and 'temurin'
         spawns = [line for line in lines if self.is_child_job_line(line)]
 
@@ -96,20 +96,26 @@ class JenkinsConsoleParser:
                     spawn_text = link.text
                     spawn_url = link.get("href", "")
                     spawn_jobnum = link.text.split("#")[1]
-                    plat_info = extracted_jobname.split("-")
-                    spawn_jdk = plat_info[0]
-                    spawn_os = plat_info[2]
-                    spawn_arch = "-".join(plat_info[3:-1])
-                    spawned_jobs[extracted_jobname] = SpawnedJob(
-                        text=spawn_text,
-                        number=spawn_jobnum,
-                        os=spawn_os,
-                        arch=spawn_arch,
-                        jdk=spawn_jdk,
-                        url=spawn_url,
-                        result=None,  # Result will be filled later if available
-                    )
-                    log.debug(pprint.pformat(spawned_jobs[extracted_jobname]))
+
+                    # Look up platform info from job_platforms dictionary
+                    if extracted_jobname in job_platforms:
+                        platform_info = job_platforms[extracted_jobname]
+                        spawn_jdk = platform_info["jdk"]
+                        spawn_os = platform_info["os"]
+                        spawn_arch = platform_info["arch"]
+
+                        spawned_jobs[extracted_jobname] = SpawnedJob(
+                            text=spawn_text,
+                            number=spawn_jobnum,
+                            os=spawn_os,
+                            arch=spawn_arch,
+                            jdk=spawn_jdk,
+                            url=spawn_url,
+                            result=None,  # Result will be filled later if available
+                        )
+                        log.debug(pprint.pformat(spawned_jobs[extracted_jobname]))
+                    else:
+                        log.debug(f"Job {extracted_jobname} not found in platform configuration, skipping")
                 else:
                     log.debug("not a job we are interested in")
 
@@ -152,12 +158,13 @@ class JenkinsConsoleParser:
         """For each spawned job, find the result in the lines and update the job."""
         pass
 
-    def parse_console_output(self, console_content: str) -> Dict[str, Any]:
+    def parse_console_output(self, console_content: str, job_platforms: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         """
         Parse Jenkins console output to extract spawned pipeline information.
 
         Args:
             console_content: The content of the Jenkins console output
+            job_platforms: Dictionary mapping job names to platform info
 
         Returns:
             Dictionary containing parent pipeline info and spawned jobs
@@ -168,9 +175,33 @@ class JenkinsConsoleParser:
         parent_info = self.extract_parent_info(lines)
 
         # Extract spawned jobs information
-        spawned_jobs = self.extract_spawned_jobs(lines)
+        spawned_jobs = self.extract_spawned_jobs(lines, job_platforms)
 
         return {"parent": parent_info, "spawned_jobs": spawned_jobs}
+
+
+def load_job_platforms_config(config_file: Path) -> Dict[str, Dict[str, str]]:
+    """Load job platform configuration from JSON file.
+
+    Args:
+        config_file: Path to the JSON configuration file
+
+    Returns:
+        Dictionary mapping job names to platform info
+
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        json.JSONDecodeError: If config file is invalid JSON
+    """
+    try:
+        with open(config_file, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        log.error(f"Config file not found: {config_file}")
+        raise
+    except json.JSONDecodeError as e:
+        log.error(f"Invalid JSON in config file {config_file}: {e}")
+        raise
 
 
 @click.command()
@@ -193,13 +224,22 @@ class JenkinsConsoleParser:
     help="Path for the output JSON file",
 )
 @click.option(
+    "-c",
+    "--config",
+    "config_file",
+    required=False,
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
+    default=Path(__file__).parent.parent / "config" / "jobs-platform-info.json",
+    help="Path to the jobs platform info config file",
+)
+@click.option(
     "-V",
     "--verbose",
     required=False,
     is_flag=True,
     help="Enable verbose debug logging in console output.",
 )
-def main(input_file: Path, output_file: Path, verbose: bool) -> None:
+def main(input_file: Path, output_file: Path, config_file: Path, verbose: bool) -> None:
     """Extract spawned pipeline jobs from Jenkins console output.
 
     Examples:
@@ -214,13 +254,17 @@ def main(input_file: Path, output_file: Path, verbose: bool) -> None:
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
+        # Load job platform configuration
+        job_platforms = load_job_platforms_config(config_file)
+        log.debug(f"Loaded {len(job_platforms)} job platform mappings from {config_file}")
+
         # Read console output
         with open(input_file, encoding="utf-8") as f:
             console_content = f.read()
 
         # Parse console output
         console_parser = JenkinsConsoleParser()
-        result = console_parser.parse_console_output(console_content)
+        result = console_parser.parse_console_output(console_content, job_platforms)
 
         # Write JSON output
         with open(output_file, "w", encoding="utf-8") as f:
