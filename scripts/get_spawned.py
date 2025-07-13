@@ -7,14 +7,19 @@ spawned during a pipeline run, extracting information like pipeline name,
 run number, URL, and result status.
 """
 
-import argparse
 import json
+import logging
 import sys
+
+import click
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from bs4 import BeautifulSoup
+
+# Set up logging
+log = logging.getLogger(__name__)
 
 # String patterns to use to match parent pipeline information in the console output.
 PARENT_PIPELINE_START_PATTERN = "Started by upstream project "
@@ -65,11 +70,11 @@ class JenkinsConsoleParser:
             if _link := lparsed.find_all("a", href=True):
                 # It will be the first (and only) link in the line that we are interested in.
                 link = _link[0]
-                print(f"Finding spawned job information for line: {line}")
+                log.info(f"Finding spawned job information for line: {line}")
                 extracted_jobname = [n for n in link.get("href").split("/") if "-release-" in n and "-temurin" in n]
                 if len(extracted_jobname) == 1:
                     spawn_jobname = extracted_jobname[0]
-                    print(f"  Found Job Name: {spawn_jobname}")
+                    log.info(f"  Found Job Name: {spawn_jobname}")
                     spawn_text = link.text
                     spawn_url = link.get("href", "")
                     spawn_jobnum = link.text.split("#")[1]
@@ -87,7 +92,7 @@ class JenkinsConsoleParser:
                         result=None,  # Result will be filled later if available
                     )
                 else:
-                    print("not a job we are interested in")
+                    log.info("not a job we are interested in")
 
         return spawned_jobs
 
@@ -149,6 +154,12 @@ class JenkinsConsoleParser:
 
 def main() -> None:
     """Main function to handle command line arguments and execute the script."""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
     parser = argparse.ArgumentParser(
         description="Extract spawned pipeline jobs from Jenkins console output",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -174,11 +185,11 @@ Examples:
     # Validate input file
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"Error: Input file '{args.input}' does not exist.", file=sys.stderr)
+        log.error(f"Error: Input file '{args.input}' does not exist.")
         sys.exit(1)
 
     if not input_path.is_file():
-        print(f"Error: '{args.input}' is not a file.", file=sys.stderr)
+        log.error(f"Error: '{args.input}' is not a file.")
         sys.exit(1)
 
     # Create output directory if it doesn't exist
@@ -198,12 +209,12 @@ Examples:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False, cls=SpawnedJobEncoder)
 
-        print(f"Successfully parsed console output and saved results to '{args.output}'")
-        print(f"Found {len(result['spawned_jobs'])} spawned jobs")
+        log.info(f"Successfully parsed console output and saved results to '{args.output}'")
+        log.info(f"Found {len(result['spawned_jobs'])} spawned jobs")
 
     except Exception as e:
-        print(f"Error processing file: {e}", file=sys.stderr)
-        sys.exit(1)
+        log.error(f"Error processing file: {e}")
+        raise
 
 
 if __name__ == "__main__":
