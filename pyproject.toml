@@ -11,6 +11,7 @@ requires-python = ">=3.8"
 dependencies = [
     "requests>=2.25.0",
     "click>=8.0.0",
+    "beautifulsoup4>=4.13",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "types-requests>=2.25.0",
+    "types_beautifulsoup4>=4.12"
 ]
 
 [tool.ruff]

@@ -11,44 +11,85 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from bs4 import BeautifulSoup
+
+# String patterns to use to match parent pipeline information in the console output.
+PARENT_PIPELINE_START_PATTERN = "Started by upstream project "
+PARENT_PIPELINE_EXTRA_MATCH_PHRASE = "build number"
+
+@dataclass
+class SpawnedJob:
+    """Data class to represent a spawned job."""
+
+    text: str
+    number: str
+    os: str
+    arch: str
+    jdk: str
+    url: Optional[str] = None
+    result: Optional[str] = None
+
+class SpawnedJobEncoder(json.JSONEncoder):  
+    """Custom JSON encoder for SpawnedJob objects."""
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, SpawnedJob):
+            return {
+                "text": obj.text,
+                "number": obj.number,
+                "os": obj.os,
+                "arch": obj.arch,
+                "jdk": obj.jdk,
+                "url": obj.url,
+                "result": obj.result,
+            }
+        return super().default(obj)
 
 class JenkinsConsoleParser:
     """Parser for Jenkins console output to extract spawned pipeline information."""
 
-    def __init__(self) -> None:
-        # Common patterns for Jenkins pipeline job triggers and results
-        self.patterns = {
-            # Pattern for pipeline job triggers (various formats)
-            "job_trigger": [
-                r"Starting building: (.+?) #(\d+)",  # New pattern for "Starting building:" format
-                r"Starting build job (\S+) #(\d+)",
-                r"Triggering downstream project (\S+)",
-                r"Scheduling project: (\S+)",
-                r"Build (\S+) #(\d+) started",
-                r"(\S+) #(\d+) started",
-            ],
-            # Pattern for job URLs
-            "job_url": [
-                r"(https?://[^\s]+/job/[^/\s]+/\d+)/?",
-                r"Console output: (https?://[^\s]+/job/[^/\s]+/\d+)",
-            ],
-            # Pattern for job results
-            "job_result": [
-                r"(\S+) #(\d+) completed: (\w+)",
-                r"Finished: (\w+)",
-                r"Build (\S+) #(\d+) completed with result (\w+)",
-                r"(\S+) #(\d+): (\w+)",
-            ],
-            # Pattern for parent pipeline information
-            "parent_info": [
-                r'Started by upstream project "([^"]+)" build number (\d+)',
-                r"Running on (.+)",
-                r"Pipeline: (.+)",
-            ],
-        }
+    def extract_spawned_jobs(self, lines: List[str]) -> Dict[str, SpawnedJob]:
+        # Regex to match strings containing 'jdk[number]u', 'release', and 'temurin'
+        spawns = [l for l in lines if "Starting building: " in l]
+
+        spawned_jobs: Dict[str, SpawnedJob] = {}
+
+        for line in spawns:
+            lparsed = BeautifulSoup(line, "html.parser")
+            if lparsed.find("a", href=True):
+                print(f"Finding spawned job information for line: {line}")
+                extracted_jobname = [
+                    n
+                    for n in lparsed.a.get("href").split("/")
+                    if "-release-" in n and "-temurin" in n
+                ]
+                if len(extracted_jobname) == 1:
+                    spawn_jobname = extracted_jobname[0]
+                    print(f"  Found Job Name: {spawn_jobname}")
+                    spawn_text = lparsed.a.text
+                    spawn_url = lparsed.a.get("href", "")
+                    spawn_jobnum = lparsed.a.text.split("#")[1]
+                    plat_info = spawn_jobname.split("-")
+                    spawn_jdk = plat_info[0]
+                    spawn_os = plat_info[2]
+                    spawn_arch = "-".join(plat_info[3:-1])
+                    spawned_jobs[spawn_jobname] = SpawnedJob(
+                        text=spawn_text,
+                        number=spawn_jobnum,
+                        os=spawn_os,
+                        arch=spawn_arch,
+                        jdk=spawn_jdk,
+                        url=spawn_url,
+                        result=None,  # Result will be filled later if available
+                    )
+                else:
+                    print("not a job we are interested in")
+
+        return spawned_jobs
 
     def parse_console_output(self, console_content: str) -> Dict[str, Any]:
         """
@@ -63,157 +104,48 @@ class JenkinsConsoleParser:
         lines = console_content.split("\n")
 
         # Extract parent pipeline information
-        parent_info = self._extract_parent_info(lines)
+        parent_info = self.extract_parent_info(lines)
 
         # Extract spawned jobs information
-        spawned_jobs = self._extract_spawned_jobs(lines)
+        spawned_jobs = self.extract_spawned_jobs(lines)
 
         return {"parent": parent_info, "spawned_jobs": spawned_jobs}
 
-    def _extract_parent_info(self, lines: List[str]) -> Dict[str, Any]:
+    def extract_parent_info(self, lines: List[str]) -> Dict[str, Any]:
         """Extract information about the parent pipeline."""
         parent_info = {
-            "name": "Unknown",
+            "pipeline_name": "Unknown",
+            "pipeline_url": "",
             "build_number": "Unknown",
-            "url": None,
-            "node": None,
+            "build_url": "",
         }
 
-        for line in lines:
-            # Look for parent pipeline indicators
-            for pattern in self.patterns["parent_info"]:
-                match = re.search(pattern, line, re.IGNORECASE)
-                if match:
-                    if "upstream project" in pattern:
-                        parent_info["name"] = match.group(1)
-                        parent_info["build_number"] = match.group(2)
-                    elif "Running on" in pattern:
-                        parent_info["node"] = match.group(1)
-                    elif "Pipeline" in pattern:
-                        parent_info["name"] = match.group(1)
+        # Look for the lines that contain "Started by upstream project", and keep only the content after that phrase from each line.
+        parent_lines = [
+            l[l.find(PARENT_PIPELINE_START_PATTERN) + len(PARENT_PIPELINE_START_PATTERN):]
+            for l in lines
+            if PARENT_PIPELINE_START_PATTERN in l and PARENT_PIPELINE_EXTRA_MATCH_PHRASE in l
+        ]
+
+        for line in parent_lines:
+            # There should only be one parent pipeline info line, near the top. The line will look like:
+            # Started by upstream project "path/to/job-name" build number 1234
+            lparse = BeautifulSoup(line, "html.parser")
+            links = lparse.find_all("a", href=True)
+            if len(links) == 2:
+                parent_info["pipeline_name"] = links[0].text.strip()
+                parent_info["pipeline_url"] = links[0].get("href", "")
+                parent_info["build_number"] = links[1].text.strip()
+                parent_info["build_url"] = links[1].get("href", "")
+            break
 
         return parent_info
 
-    def _extract_spawned_jobs(self, lines: List[str]) -> List[Dict[str, Any]]:
-        """Extract information about spawned jobs from console output."""
-        jobs_dict = {}  # To track jobs by name and build number
-
-        for line in lines:
-            # Look for job triggers
-            job_info = self._extract_job_trigger(line)
-            if job_info:
-                job_name = job_info["name"]
-                build_number = job_info.get("build_number", "unknown")
-                job_key = f"{job_name}#{build_number}"
-
-                # Initialize or update job entry
-                if job_key not in jobs_dict:
-                    jobs_dict[job_key] = {
-                        "name": job_name,
-                        "build_number": build_number,
-                        "url": None,
-                        "result": None,
-                    }
-
-            # Look for job URLs
-            url = self._extract_job_url(line)
-            if url:
-                # Try to extract job name and build number from URL
-                url_match = re.search(r"/job/([^/]+)/(\d+)", url)
-                if url_match:
-                    job_name = url_match.group(1)
-                    build_number = url_match.group(2)
-                    job_key = f"{job_name}#{build_number}"
-                    if job_key in jobs_dict:
-                        jobs_dict[job_key]["url"] = url
-                    else:
-                        # Create new entry if not found
-                        jobs_dict[job_key] = {
-                            "name": job_name,
-                            "build_number": build_number,
-                            "url": url,
-                            "result": None,
-                        }
-
-            # Look for job results
-            result_info = self._extract_job_result(line)
-            if result_info and result_info.get("name") and result_info.get("build_number"):
-                job_name = result_info["name"]
-                build_number = result_info["build_number"]
-                job_key = f"{job_name}#{build_number}"
-
-                if job_key in jobs_dict:
-                    jobs_dict[job_key]["result"] = result_info["result"]
-                else:
-                    # Create new entry if not found
-                    jobs_dict[job_key] = {
-                        "name": job_name,
-                        "build_number": build_number,
-                        "url": None,
-                        "result": result_info["result"],
-                    }
-
-        # Convert dict to list and filter out jobs with unknown build numbers
-        # if better entries exist
-        spawned_jobs = []
-        processed_names = set()
-
-        # First pass: add jobs with known build numbers
-        for _job_key, job_info in jobs_dict.items():
-            if job_info["build_number"] != "unknown":
-                spawned_jobs.append(job_info)
-                processed_names.add(job_info["name"])
-
-        # Second pass: add jobs with unknown build numbers only if no better
-        # entry exists
-        for _job_key, job_info in jobs_dict.items():
-            if job_info["build_number"] == "unknown" and job_info["name"] not in processed_names:
-                spawned_jobs.append(job_info)
-
-        return spawned_jobs
-
-    def _extract_job_trigger(self, line: str) -> Optional[Dict[str, Any]]:
-        """Extract job trigger information from a line."""
-        for pattern in self.patterns["job_trigger"]:
-            match = re.search(pattern, line, re.IGNORECASE)
-            if match:
-                job_name = match.group(1)
-                # Handle "Starting building:" format by replacing " » " with "/"
-                if " » " in job_name:
-                    job_name = job_name.replace(" » ", "/")
-
-                job_info = {"name": job_name}
-                if len(match.groups()) > 1 and match.group(2):
-                    job_info["build_number"] = match.group(2)
-                job_info["url"] = None
-                job_info["result"] = None
-                return job_info
-        return None
-
-    def _extract_job_url(self, line: str) -> Optional[str]:
-        """Extract job URL from a line."""
-        for pattern in self.patterns["job_url"]:
-            match = re.search(pattern, line)
-            if match:
-                return match.group(1)
-        return None
-
-    def _extract_job_result(self, line: str) -> Optional[Dict[str, Any]]:
-        """Extract job result information from a line."""
-        for pattern in self.patterns["job_result"]:
-            match = re.search(pattern, line, re.IGNORECASE)
-            if match:
-                groups = match.groups()
-                if len(groups) >= 3:
-                    return {
-                        "name": groups[0],
-                        "build_number": groups[1],
-                        "result": groups[2],
-                        "url": None,
-                    }
-                elif len(groups) == 1:
-                    return {"result": groups[0]}
-        return None
+    def extract_job_results(
+        self, lines: List[str], jobs: List[SpawnedJob]
+    ) -> Optional[Dict[str, Any]]:
+        """For each spawned job, find the result in the lines and update the job."""
+        pass
 
 
 def main() -> None:
@@ -236,7 +168,9 @@ Examples:
         help="Path to the Jenkins console output file",
     )
 
-    parser.add_argument("-o", "--output", required=True, type=str, help="Path for the output JSON file")
+    parser.add_argument(
+        "-o", "--output", required=True, type=str, help="Path for the output JSON file"
+    )
 
     args = parser.parse_args()
 
@@ -265,9 +199,11 @@ Examples:
 
         # Write JSON output
         with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
+            json.dump(result, f, indent=2, ensure_ascii=False, cls=SpawnedJobEncoder)
 
-        print(f"Successfully parsed console output and saved results to '{args.output}'")
+        print(
+            f"Successfully parsed console output and saved results to '{args.output}'"
+        )
         print(f"Found {len(result['spawned_jobs'])} spawned jobs")
 
     except Exception as e:
