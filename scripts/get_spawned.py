@@ -60,19 +60,21 @@ class JenkinsConsoleParser:
 
         for line in spawns:
             lparsed = BeautifulSoup(line, "html.parser")
-            if lparsed.find("a", href=True):
+            if _link := lparsed.find_all("a", href=True):
+                # It will be the first (and only) link in the line that we are interested in.
+                link = _link[0]
                 print(f"Finding spawned job information for line: {line}")
                 extracted_jobname = [
                     n
-                    for n in lparsed.a.get("href").split("/")
+                    for n in link.get("href").split("/")
                     if "-release-" in n and "-temurin" in n
                 ]
                 if len(extracted_jobname) == 1:
                     spawn_jobname = extracted_jobname[0]
                     print(f"  Found Job Name: {spawn_jobname}")
-                    spawn_text = lparsed.a.text
-                    spawn_url = lparsed.a.get("href", "")
-                    spawn_jobnum = lparsed.a.text.split("#")[1]
+                    spawn_text = link.text
+                    spawn_url = link.get("href", "")
+                    spawn_jobnum = link.text.split("#")[1]
                     plat_info = spawn_jobname.split("-")
                     spawn_jdk = plat_info[0]
                     spawn_os = plat_info[2]
