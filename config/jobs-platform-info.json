@@ -1,0 +1,42 @@
+{
+  "jdk21u-release-alpine-linux-aarch64-temurin": {
+    "os": "alpine-linux",
+    "arch": "aarch64",
+    "jdk": "jdk21"
+  },
+  "jdk21u-release-windows-aarch64-temurin": {
+    "os": "windows",
+    "arch": "aarch64",
+    "jdk": "jdk21"
+  },
+  "jdk21u-release-aix-ppc64-temurin": {
+    "os": "aix",
+    "arch": "ppc64",
+    "jdk": "jdk21"
+  },
+  "jdk21u-release-linux-ppc64le-temurin": {
+    "os": "linux",
+    "arch": "ppc64le",
+    "jdk": "jdk21"
+  },
+  "jdk8u-release-windows-x86-32-temurin": {
+    "os": "windows",
+    "arch": "x86-32",
+    "jdk": "jdk8"
+  },
+  "jdk8u-release-linux-ppc64le-temurin": {
+    "os": "linux",
+    "arch": "ppc64le",
+    "jdk": "jdk8"
+  },
+  "jdk8u-release-solaris-sparcv9-temurin": {
+    "os": "solaris",
+    "arch": "sparcv9",
+    "jdk": "jdk8"
+  },
+  "jdk8u-release-linux-aarch64-temurin": {
+    "os": "linux",
+    "arch": "aarch64",
+    "jdk": "jdk8u"
+  }
+}

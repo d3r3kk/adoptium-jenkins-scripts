@@ -66,7 +66,7 @@ def get_console_log(
 
         # Check if request was successful
         if response.status_code == 200:
-            return response.text
+            return str(response.text)
         elif response.status_code == 401:
             raise requests.exceptions.HTTPError("Authentication failed. Please check your username and API token.")
         elif response.status_code == 404:
