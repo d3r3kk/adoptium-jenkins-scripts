@@ -9,7 +9,6 @@ run number, URL, and result status.
 
 import argparse
 import json
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,7 +56,7 @@ class JenkinsConsoleParser:
 
     def extract_spawned_jobs(self, lines: List[str]) -> Dict[str, SpawnedJob]:
         # Regex to match strings containing 'jdk[number]u', 'release', and 'temurin'
-        spawns = [l for l in lines if "Starting building: " in l]
+        spawns = [line for line in lines if "Starting building: " in line]
 
         spawned_jobs: Dict[str, SpawnedJob] = {}
 
@@ -121,11 +120,12 @@ class JenkinsConsoleParser:
             "build_url": "",
         }
 
-        # Look for the lines that contain "Started by upstream project", and keep only the content after that phrase from each line.
+        # Look for the lines that contain "Started by upstream project", and
+        # keep only the content after that phrase from each line.
         parent_lines = [
-            l[l.find(PARENT_PIPELINE_START_PATTERN) + len(PARENT_PIPELINE_START_PATTERN) :]
-            for l in lines
-            if PARENT_PIPELINE_START_PATTERN in l and PARENT_PIPELINE_EXTRA_MATCH_PHRASE in l
+            line[line.find(PARENT_PIPELINE_START_PATTERN) + len(PARENT_PIPELINE_START_PATTERN) :]
+            for line in lines
+            if PARENT_PIPELINE_START_PATTERN in line and PARENT_PIPELINE_EXTRA_MATCH_PHRASE in line
         ]
 
         for line in parent_lines:
