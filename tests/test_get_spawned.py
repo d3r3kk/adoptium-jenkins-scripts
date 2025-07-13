@@ -24,7 +24,6 @@ class TestJenkinsConsoleParser:
         """Set up test parser for each test."""
         self.parser = JenkinsConsoleParser()
 
-
     def test_empty_console_output(self):
         """Test handling of empty console output."""
         console_content = ""

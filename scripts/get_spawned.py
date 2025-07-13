@@ -94,26 +94,6 @@ class JenkinsConsoleParser:
 
         return spawned_jobs
 
-    def parse_console_output(self, console_content: str) -> Dict[str, Any]:
-        """
-        Parse Jenkins console output to extract spawned pipeline information.
-
-        Args:
-            console_content: The content of the Jenkins console output
-
-        Returns:
-            Dictionary containing parent pipeline info and spawned jobs
-        """
-        lines = console_content.split("\n")
-
-        # Extract parent pipeline information
-        parent_info = self.extract_parent_info(lines)
-
-        # Extract spawned jobs information
-        spawned_jobs = self.extract_spawned_jobs(lines)
-
-        return {"parent": parent_info, "spawned_jobs": spawned_jobs}
-
     def extract_parent_info(self, lines: List[str]) -> Dict[str, Any]:
         """Extract information about the parent pipeline."""
         parent_info = {
@@ -149,38 +129,55 @@ class JenkinsConsoleParser:
         """For each spawned job, find the result in the lines and update the job."""
         pass
 
+    def parse_console_output(self, console_content: str) -> Dict[str, Any]:
+        """
+        Parse Jenkins console output to extract spawned pipeline information.
 
+        Args:
+            console_content: The content of the Jenkins console output
+
+        Returns:
+            Dictionary containing parent pipeline info and spawned jobs
+        """
+        lines = console_content.split("\n")
+
+        # Extract parent pipeline information
+        parent_info = self.extract_parent_info(lines)
+
+        # Extract spawned jobs information
+        spawned_jobs = self.extract_spawned_jobs(lines)
+
+        return {"parent": parent_info, "spawned_jobs": spawned_jobs}
 
 
 @click.command()
 @click.help_option("--help", "-h")
 @click.version_option("1.0.0", "--version", "-v", message="%(prog)s version %(version)s")
 @click.option(
-    "-i", "--input",
+    "-i",
+    "--input",
     "input_file",
     required=True,
     type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
-    help="Path to the Jenkins console output file"
+    help="Path to the Jenkins console output file",
 )
 @click.option(
-    "-o", "--output",
+    "-o",
+    "--output",
     "output_file",
     required=True,
     type=click.Path(path_type=Path),
-    help="Path for the output JSON file"
+    help="Path for the output JSON file",
 )
 def main(input_file: Path, output_file: Path) -> None:
     """Extract spawned pipeline jobs from Jenkins console output.
 
-      Examples:
-        get_spawned.py -i console_output.txt -o spawned_jobs.json
-        get_spawned.py --input /path/to/console.txt --output /path/to/output.json
+    Examples:
+      get_spawned.py -i console_output.txt -o spawned_jobs.json
+      get_spawned.py --input /path/to/console.txt --output /path/to/output.json
     """
     # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Create output directory if it doesn't exist
     output_file.parent.mkdir(parents=True, exist_ok=True)
