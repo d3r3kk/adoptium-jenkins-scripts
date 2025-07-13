@@ -9,6 +9,7 @@ run number, URL, and result status.
 
 import json
 import logging
+import pprint
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -17,11 +18,15 @@ import click
 from bs4 import BeautifulSoup
 
 # Set up logging
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 
 # String patterns to use to match parent pipeline information in the console output.
 PARENT_PIPELINE_START_PATTERN = "Started by upstream project "
 PARENT_PIPELINE_EXTRA_MATCH_PHRASE = "build number"
+
+# String patterns to use to match spawned job lines in the console output.
+CHILD_JOB_LINE_PATTERN = "Starting building: "
 
 
 @dataclass
@@ -57,9 +62,23 @@ class SpawnedJobEncoder(json.JSONEncoder):
 class JenkinsConsoleParser:
     """Parser for Jenkins console output to extract spawned pipeline information."""
 
+    def is_child_job_line(self, line: str) -> bool:
+        """Check if the line indicates a spawned job."""
+        return CHILD_JOB_LINE_PATTERN in line and "-release-" in line and "-temurin" in line
+
+    def extract_jobname_from_url(self, url: str) -> Optional[str]:
+        """Extract the job name from the URL."""
+        # The job name will have the format 'jdk[number]u-release-[version]-temurin-[os]-[arch]' in one of the
+        # path segments of the URL. We want to extract that segment and use it to determine platform info.
+        jobname_candidates = [n for n in url.split("/") if "-release-" in n and "-temurin" in n]
+        if len(jobname_candidates) == 1:
+            return jobname_candidates[0]
+
+        return None
+
     def extract_spawned_jobs(self, lines: List[str]) -> Dict[str, SpawnedJob]:
         # Regex to match strings containing 'jdk[number]u', 'release', and 'temurin'
-        spawns = [line for line in lines if "Starting building: " in line]
+        spawns = [line for line in lines if self.is_child_job_line(line)]
 
         spawned_jobs: Dict[str, SpawnedJob] = {}
 
@@ -68,19 +87,20 @@ class JenkinsConsoleParser:
             if _link := lparsed.find_all("a", href=True):
                 # It will be the first (and only) link in the line that we are interested in.
                 link = _link[0]
-                log.info(f"Finding spawned job information for line: {line}")
-                extracted_jobname = [n for n in link.get("href").split("/") if "-release-" in n and "-temurin" in n]
-                if len(extracted_jobname) == 1:
-                    spawn_jobname = extracted_jobname[0]
-                    log.info(f"  Found Job Name: {spawn_jobname}")
+                log.debug(f"Finding spawned job information for line: {line}")
+                # The job name will have the format 'jdk[number]u-release-[version]-temurin-[os]-[arch]' in one of the
+                # path segments of the URL. We want to extract that segment and use it to determine platform info.
+                # If the URL does not contain expected segments, this is not a spawned job we are interested in.
+                if extracted_jobname := self.extract_jobname_from_url(link.get("href", "")):
+                    log.debug(f"  Found Job Name: {extracted_jobname}")
                     spawn_text = link.text
                     spawn_url = link.get("href", "")
                     spawn_jobnum = link.text.split("#")[1]
-                    plat_info = spawn_jobname.split("-")
+                    plat_info = extracted_jobname.split("-")
                     spawn_jdk = plat_info[0]
                     spawn_os = plat_info[2]
                     spawn_arch = "-".join(plat_info[3:-1])
-                    spawned_jobs[spawn_jobname] = SpawnedJob(
+                    spawned_jobs[extracted_jobname] = SpawnedJob(
                         text=spawn_text,
                         number=spawn_jobnum,
                         os=spawn_os,
@@ -89,8 +109,11 @@ class JenkinsConsoleParser:
                         url=spawn_url,
                         result=None,  # Result will be filled later if available
                     )
+                    log.debug(pprint.pformat(spawned_jobs[extracted_jobname]))
                 else:
-                    log.info("not a job we are interested in")
+                    log.debug("not a job we are interested in")
+
+        log.info(f"Found {len(spawned_jobs)} spawned jobs")
 
         return spawned_jobs
 
@@ -169,15 +192,23 @@ class JenkinsConsoleParser:
     type=click.Path(path_type=Path),
     help="Path for the output JSON file",
 )
-def main(input_file: Path, output_file: Path) -> None:
+@click.option(
+    "-V",
+    "--verbose",
+    required=False,
+    is_flag=True,
+    help="Enable verbose debug logging in console output.",
+)
+def main(input_file: Path, output_file: Path, verbose: bool) -> None:
     """Extract spawned pipeline jobs from Jenkins console output.
 
     Examples:
       get_spawned.py -i console_output.txt -o spawned_jobs.json
       get_spawned.py --input /path/to/console.txt --output /path/to/output.json
     """
-    # Configure logging
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    if verbose:
+        log.setLevel(logging.DEBUG)
 
     # Create output directory if it doesn't exist
     output_file.parent.mkdir(parents=True, exist_ok=True)
