@@ -34,7 +34,9 @@ def read_token_from_file(token_file_path: Path) -> str:
         raise
 
 
-def get_console_log(jenkins_url: str, username: str, api_token: str, pipeline_name: str, run_number: int) -> str:
+def get_console_log(
+    jenkins_url: str, username: str, api_token: str, pipeline_name: str, run_number: int, html_log: bool = False
+) -> str:
     """Retrieve console log from Jenkins pipeline run."""
     # Ensure jenkins_url ends with /
     if not jenkins_url.endswith("/"):
@@ -50,7 +52,10 @@ def get_console_log(jenkins_url: str, username: str, api_token: str, pipeline_na
     # https://ci.adoptium.net/job/build-scripts/job/release-openjdk8-pipeline/85/console
     console_url = urljoin(
         jenkins_url,
-        f"job/{encoded_pipeline}/{run_number}/timestamps/?time=HH:mm:ss&timeZone=GMT-7&appendLog&locale=en_US",
+        (
+            f"job/{encoded_pipeline}/{run_number}/"
+            f"{'consoleFull' if html_log else 'timestamps/?time=HH:mm:ss&timeZone=GMT-7&appendLog&locale=en_US'}"
+        ),
     )
 
     log.info(f"Attempting to retrieve console log from: {console_url}")
@@ -138,11 +143,12 @@ def write_console_log(console_log: str, output_file: Path) -> None:
     help="Pipeline run number (e.g., 48)",
 )
 @click.option(
-    "--output",
+    "-o",
+    "--output-file-base",
     required=False,
-    type=click.Path(),
-    default="output.log",
-    help="Output file path/name for console log. Defaults to 'output.log'.",
+    type=click.Path(exists=False),
+    default="output",
+    help="Base name for the output files, defaults to 'output'. HTML and RAW logs will use this base name.",
 )
 def main(
     url: str,
@@ -151,15 +157,15 @@ def main(
     token_file: click.Path,
     pipeline_name: str,
     run_number: int,
-    output: click.Path,
+    output_file_base: click.Path,
 ) -> None:
     """Pull console logs from Jenkins pipeline runs.
 
     \b
     Examples:
-      python get_console.py --pipeline-name "release-openjdk21-pipeline" --run-number 48 --output console.log
+      python get_console.py --pipeline-name "release-openjdk21-pipeline" --run-number 48 --output-file-base console
       python get_console.py --token-file token.txt --pipeline-name "build-scripts/release-openjdk21-pipeline" \\
-          --run-number 48 --output logs/console_48.log
+          --run-number 48 --output-file-base logs/console_48
       python get_console.py --token "your-api-token" --username jenkins-user --url https://ci.adoptium.net/ \\
           --pipeline-name "release-openjdk21-pipeline" --run-number 48
     """
@@ -183,17 +189,22 @@ def main(
     if run_number < 1:
         raise ValueError("Run number must be a positive integer.")
 
+    html_output = Path(f"{output_file_base}.html.log")
+    raw_output = Path(f"{output_file_base}.raw.log")
     # Retrieve console log
     log.info(f"Connecting to Jenkins server: {url}")
     log.info(f"Pipeline: {pipeline_name}")
     log.info(f"Run number: {run_number}")
-    log.info(f"Output file: {output}")
+    log.info(f"""Output files: {html_output},
+              {raw_output}""")
     log.info("")
 
-    console_log = get_console_log(url, username, api_token, pipeline_name, run_number)
+    html_log = get_console_log(url, username, api_token, pipeline_name, run_number, html_log=True)
+    raw_log = get_console_log(url, username, api_token, pipeline_name, run_number)
 
     # Write to output file
-    write_console_log(console_log, Path(str(output)))
+    write_console_log(html_log, html_output)
+    write_console_log(raw_log, raw_output)
 
 
 if __name__ == "__main__":

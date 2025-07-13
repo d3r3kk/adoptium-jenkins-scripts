@@ -356,7 +356,9 @@ class TestIntegration:
         token_file.write_text("my-api-token")
 
         # Create output file path
-        output_file = tmp_path / "logs" / "console.log"
+        output_file = tmp_path / "logs" / "console"
+        raw_log = output_file.with_suffix(".raw.log")
+        html_log = output_file.with_suffix(".html.log")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -372,7 +374,7 @@ class TestIntegration:
                 "build-scripts/release-openjdk21-pipeline",
                 "--run-number",
                 "85",
-                "--output",
+                "--output-file-base",
                 str(output_file),
             ],
         )
@@ -381,13 +383,14 @@ class TestIntegration:
         assert result.exit_code == 0
 
         # Verify the HTTP request was made correctly
-        mock_get.assert_called_once()
+        assert mock_get.call_count == 2  # One for raw log, one for HTML log
         called_url = mock_get.call_args[0][0]
         assert "build-scripts/release-openjdk21-pipeline/85" in called_url
 
         # Verify the output file was created with correct content
-        assert output_file.exists()
-        assert output_file.read_text() == "Sample console log output\nBuild completed successfully"
+        assert raw_log.exists()
+        assert html_log.exists()
+        assert raw_log.read_text() == "Sample console log output\nBuild completed successfully"
 
 
 if __name__ == "__main__":
