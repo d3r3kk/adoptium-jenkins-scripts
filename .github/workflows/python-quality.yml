@@ -20,6 +20,11 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            path: ~/.cache/pip
+          - os: windows-latest
+            path: ~\AppData\Local\pip\Cache
         python-version: ["3.12"]
 
     steps:
@@ -29,6 +34,15 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+
+    # Grab the cached pip installs so we don't have to re-download them
+    - uses: actions/cache@v4
+      with:
+        path: ${{ matrix.path }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
 
     - name: Install dependencies
       run: |
