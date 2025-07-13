@@ -9,13 +9,11 @@ run number, URL, and result status.
 
 import json
 import logging
-import sys
-
-import click
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import click
 from bs4 import BeautifulSoup
 
 # Set up logging
@@ -152,53 +150,44 @@ class JenkinsConsoleParser:
         pass
 
 
-def main() -> None:
-    """Main function to handle command line arguments and execute the script."""
+
+
+@click.command()
+@click.help_option("--help", "-h")
+@click.version_option("1.0.0", "--version", "-v", message="%(prog)s version %(version)s")
+@click.option(
+    "-i", "--input",
+    "input_file",
+    required=True,
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=Path),
+    help="Path to the Jenkins console output file"
+)
+@click.option(
+    "-o", "--output",
+    "output_file",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Path for the output JSON file"
+)
+def main(input_file: Path, output_file: Path) -> None:
+    """Extract spawned pipeline jobs from Jenkins console output.
+
+      Examples:
+        get_spawned.py -i console_output.txt -o spawned_jobs.json
+        get_spawned.py --input /path/to/console.txt --output /path/to/output.json
+    """
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
-    parser = argparse.ArgumentParser(
-        description="Extract spawned pipeline jobs from Jenkins console output",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s -i console_output.txt -o spawned_jobs.json
-  %(prog)s --input /path/to/console.txt --output /path/to/output.json
-        """,
-    )
-
-    parser.add_argument(
-        "-i",
-        "--input",
-        required=True,
-        type=str,
-        help="Path to the Jenkins console output file",
-    )
-
-    parser.add_argument("-o", "--output", required=True, type=str, help="Path for the output JSON file")
-
-    args = parser.parse_args()
-
-    # Validate input file
-    input_path = Path(args.input)
-    if not input_path.exists():
-        log.error(f"Error: Input file '{args.input}' does not exist.")
-        sys.exit(1)
-
-    if not input_path.is_file():
-        log.error(f"Error: '{args.input}' is not a file.")
-        sys.exit(1)
-
     # Create output directory if it doesn't exist
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         # Read console output
-        with open(input_path, encoding="utf-8") as f:
+        with open(input_file, encoding="utf-8") as f:
             console_content = f.read()
 
         # Parse console output
@@ -206,10 +195,10 @@ Examples:
         result = console_parser.parse_console_output(console_content)
 
         # Write JSON output
-        with open(output_path, "w", encoding="utf-8") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False, cls=SpawnedJobEncoder)
 
-        log.info(f"Successfully parsed console output and saved results to '{args.output}'")
+        log.info(f"Successfully parsed console output and saved results to '{output_file}'")
         log.info(f"Found {len(result['spawned_jobs'])} spawned jobs")
 
     except Exception as e:
