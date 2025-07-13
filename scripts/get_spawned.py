@@ -37,18 +37,18 @@ class SpawnedJob:
 class SpawnedJobEncoder(json.JSONEncoder):
     """Custom JSON encoder for SpawnedJob objects."""
 
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, SpawnedJob):
+    def default(self, o: Any) -> Any:
+        if isinstance(o, SpawnedJob):
             return {
-                "text": obj.text,
-                "number": obj.number,
-                "os": obj.os,
-                "arch": obj.arch,
-                "jdk": obj.jdk,
-                "url": obj.url,
-                "result": obj.result,
+                "text": o.text,
+                "number": o.number,
+                "os": o.os,
+                "arch": o.arch,
+                "jdk": o.jdk,
+                "url": o.url,
+                "result": o.result,
             }
-        return super().default(obj)
+        return super().default(o)
 
 
 class JenkinsConsoleParser:
