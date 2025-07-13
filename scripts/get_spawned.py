@@ -12,10 +12,10 @@ import logging
 import pprint
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import click
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -86,38 +86,40 @@ class JenkinsConsoleParser:
             lparsed = BeautifulSoup(line, "html.parser")
             if _link := lparsed.find_all("a", href=True):
                 # It will be the first (and only) link in the line that we are interested in.
-                link = _link[0]
+                link = cast(Tag, _link[0])
                 log.debug(f"Finding spawned job information for line: {line}")
                 # The job name will have the format 'jdk[number]u-release-[version]-temurin-[os]-[arch]' in one of the
                 # path segments of the URL. We want to extract that segment and use it to determine platform info.
                 # If the URL does not contain expected segments, this is not a spawned job we are interested in.
-                if extracted_jobname := self.extract_jobname_from_url(link.get("href", "")):
-                    log.debug(f"  Found Job Name: {extracted_jobname}")
-                    spawn_text = link.text
-                    spawn_url = link.get("href", "")
-                    spawn_jobnum = link.text.split("#")[1]
+                href_value = link.get("href", "")
+                if href_value and isinstance(href_value, str):
+                    if extracted_jobname := self.extract_jobname_from_url(href_value):
+                        log.debug(f"  Found Job Name: {extracted_jobname}")
+                        spawn_text = link.text
+                        spawn_url = href_value
+                        spawn_jobnum = link.text.split("#")[1]
 
-                    # Look up platform info from job_platforms dictionary
-                    if extracted_jobname in job_platforms:
-                        platform_info = job_platforms[extracted_jobname]
-                        spawn_jdk = platform_info["jdk"]
-                        spawn_os = platform_info["os"]
-                        spawn_arch = platform_info["arch"]
+                        # Look up platform info from job_platforms dictionary
+                        if extracted_jobname in job_platforms:
+                            platform_info = job_platforms[extracted_jobname]
+                            spawn_jdk = platform_info["jdk"]
+                            spawn_os = platform_info["os"]
+                            spawn_arch = platform_info["arch"]
 
-                        spawned_jobs[extracted_jobname] = SpawnedJob(
-                            text=spawn_text,
-                            number=spawn_jobnum,
-                            os=spawn_os,
-                            arch=spawn_arch,
-                            jdk=spawn_jdk,
-                            url=spawn_url,
-                            result=None,  # Result will be filled later if available
-                        )
-                        log.debug(pprint.pformat(spawned_jobs[extracted_jobname]))
+                            spawned_jobs[extracted_jobname] = SpawnedJob(
+                                text=spawn_text,
+                                number=spawn_jobnum,
+                                os=spawn_os,
+                                arch=spawn_arch,
+                                jdk=spawn_jdk,
+                                url=spawn_url,
+                                result=None,  # Result will be filled later if available
+                            )
+                            log.debug(pprint.pformat(spawned_jobs[extracted_jobname]))
+                        else:
+                            log.debug(f"Job {extracted_jobname} not found in platform configuration, skipping")
                     else:
-                        log.debug(f"Job {extracted_jobname} not found in platform configuration, skipping")
-                else:
-                    log.debug("not a job we are interested in")
+                        log.debug("not a job we are interested in")
 
         log.info(f"Found {len(spawned_jobs)} spawned jobs")
 
@@ -146,10 +148,14 @@ class JenkinsConsoleParser:
             lparse = BeautifulSoup(line, "html.parser")
             links = lparse.find_all("a", href=True)
             if len(links) == 2:
-                parent_info["pipeline_name"] = links[0].text.strip()
-                parent_info["pipeline_url"] = links[0].get("href", "")
-                parent_info["build_number"] = links[1].text.strip()
-                parent_info["build_url"] = links[1].get("href", "")
+                link0 = cast(Tag, links[0])
+                link1 = cast(Tag, links[1])
+                parent_info["pipeline_name"] = link0.text.strip()
+                href0 = link0.get("href", "")
+                href1 = link1.get("href", "")
+                parent_info["pipeline_url"] = href0 if isinstance(href0, str) else ""
+                parent_info["build_number"] = link1.text.strip()
+                parent_info["build_url"] = href1 if isinstance(href1, str) else ""
             break
 
         return parent_info
@@ -195,7 +201,8 @@ def load_job_platforms_config(config_file: Path) -> Dict[str, Dict[str, str]]:
     """
     try:
         with open(config_file, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            return cast(Dict[str, Dict[str, str]], data)
     except FileNotFoundError:
         log.error(f"Config file not found: {config_file}")
         raise
