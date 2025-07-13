@@ -21,6 +21,7 @@ from bs4 import BeautifulSoup
 PARENT_PIPELINE_START_PATTERN = "Started by upstream project "
 PARENT_PIPELINE_EXTRA_MATCH_PHRASE = "build number"
 
+
 @dataclass
 class SpawnedJob:
     """Data class to represent a spawned job."""
@@ -33,7 +34,8 @@ class SpawnedJob:
     url: Optional[str] = None
     result: Optional[str] = None
 
-class SpawnedJobEncoder(json.JSONEncoder):  
+
+class SpawnedJobEncoder(json.JSONEncoder):
     """Custom JSON encoder for SpawnedJob objects."""
 
     def default(self, obj: Any) -> Any:
@@ -48,6 +50,7 @@ class SpawnedJobEncoder(json.JSONEncoder):
                 "result": obj.result,
             }
         return super().default(obj)
+
 
 class JenkinsConsoleParser:
     """Parser for Jenkins console output to extract spawned pipeline information."""
@@ -64,11 +67,7 @@ class JenkinsConsoleParser:
                 # It will be the first (and only) link in the line that we are interested in.
                 link = _link[0]
                 print(f"Finding spawned job information for line: {line}")
-                extracted_jobname = [
-                    n
-                    for n in link.get("href").split("/")
-                    if "-release-" in n and "-temurin" in n
-                ]
+                extracted_jobname = [n for n in link.get("href").split("/") if "-release-" in n and "-temurin" in n]
                 if len(extracted_jobname) == 1:
                     spawn_jobname = extracted_jobname[0]
                     print(f"  Found Job Name: {spawn_jobname}")
@@ -124,7 +123,7 @@ class JenkinsConsoleParser:
 
         # Look for the lines that contain "Started by upstream project", and keep only the content after that phrase from each line.
         parent_lines = [
-            l[l.find(PARENT_PIPELINE_START_PATTERN) + len(PARENT_PIPELINE_START_PATTERN):]
+            l[l.find(PARENT_PIPELINE_START_PATTERN) + len(PARENT_PIPELINE_START_PATTERN) :]
             for l in lines
             if PARENT_PIPELINE_START_PATTERN in l and PARENT_PIPELINE_EXTRA_MATCH_PHRASE in l
         ]
@@ -143,9 +142,7 @@ class JenkinsConsoleParser:
 
         return parent_info
 
-    def extract_job_results(
-        self, lines: List[str], jobs: List[SpawnedJob]
-    ) -> Optional[Dict[str, Any]]:
+    def extract_job_results(self, lines: List[str], jobs: List[SpawnedJob]) -> Optional[Dict[str, Any]]:
         """For each spawned job, find the result in the lines and update the job."""
         pass
 
@@ -170,9 +167,7 @@ Examples:
         help="Path to the Jenkins console output file",
     )
 
-    parser.add_argument(
-        "-o", "--output", required=True, type=str, help="Path for the output JSON file"
-    )
+    parser.add_argument("-o", "--output", required=True, type=str, help="Path for the output JSON file")
 
     args = parser.parse_args()
 
@@ -203,9 +198,7 @@ Examples:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False, cls=SpawnedJobEncoder)
 
-        print(
-            f"Successfully parsed console output and saved results to '{args.output}'"
-        )
+        print(f"Successfully parsed console output and saved results to '{args.output}'")
         print(f"Found {len(result['spawned_jobs'])} spawned jobs")
 
     except Exception as e:
