@@ -151,7 +151,7 @@ class JenkinsLogParser:
 
     def extract_remote_trigger(self, lines: List[str]) -> Optional[RemoteTrigger]:
         """Extract remote trigger information from console log lines."""
-        rt_details = {}
+        rt_details: Dict[str, Any] = {}
 
         for line in lines:
             line = line.strip()
@@ -221,51 +221,6 @@ class JenkinsLogParser:
         if len(parts) > 1:
             return parts[1].strip()
         return None
-
-    def _parse_parameters(self, line: str) -> Dict[str, Any]:
-        """Parse the parameters from a parameters line."""
-        parameters = {}
-
-        # Extract the parameters section (everything after the opening brace)
-        param_match = re.search(r"\{(.+)\}", line)
-        if not param_match:
-            return parameters
-
-        param_string = param_match.group(1)
-
-        # Parse parameters - handle both simple key=value and complex values with URLs
-        current_key = None
-        current_value = ""
-        i = 0
-
-        while i < len(param_string):
-            char = param_string[i]
-
-            if char == "=" and current_key is None:
-                # Found key=value separator
-                current_key = current_value.strip().rstrip(",").strip()
-                current_value = ""
-
-            elif char == "," and current_key is not None:
-                # End of current parameter
-                # Check if this is actually the end or part of a URL
-                if self._is_parameter_end(param_string, i):
-                    parameters[current_key] = self._clean_parameter_value(current_value.strip())
-                    current_key = None
-                    current_value = ""
-                else:
-                    current_value += char
-
-            else:
-                current_value += char
-
-            i += 1
-
-        # Handle the last parameter
-        if current_key is not None:
-            parameters[current_key] = self._clean_parameter_value(current_value.strip())
-
-        return parameters
 
     def _is_parameter_end(self, param_string: str, comma_index: int) -> bool:
         """Determine if a comma marks the end of a parameter or is part of a URL."""
